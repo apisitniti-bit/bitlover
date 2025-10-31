@@ -1,66 +1,22 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Activity } from "lucide-react";
 import { motion } from "framer-motion";
 import { Sparkline } from "@/components/Sparkline";
 import { cn } from "@/lib/utils";
-import axios from "axios";
+import { usePrices } from "@/contexts/PriceContext";
 
 type FilterType = "all" | "gainers" | "losers";
 
-interface MarketPrice {
-  id: string;
-  coinId: string;
-  symbol: string;
-  name: string;
-  currentPrice: number;
-  marketCap: number | null;
-  volume24h: number | null;
-  priceChange24h: number | null;
-  priceChangePerc24h: number | null;
-  lastUpdated: string;
-}
-
-interface MarketResponse {
-  success: boolean;
-  count: number;
-  lastUpdated: string | null;
-  data: MarketPrice[];
-}
-
 export default function Market() {
   const [filter, setFilter] = useState<FilterType>("all");
-  const [marketData, setMarketData] = useState<MarketPrice[]>([]);
-  const [lastUpdate, setLastUpdate] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Fetch market prices from API
-  const fetchMarketData = async () => {
-    try {
-      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
-      const response = await axios.get<MarketResponse>(`${apiUrl}/market/live`);
-      
-      if (response.data.success) {
-        setMarketData(response.data.data);
-        if (response.data.lastUpdated) {
-          const date = new Date(response.data.lastUpdated);
-          setLastUpdate(date.toLocaleTimeString());
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch market data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Fetch on mount and every 10 seconds
-  useEffect(() => {
-    fetchMarketData();
-    const interval = setInterval(fetchMarketData, 10000);
-    return () => clearInterval(interval);
-  }, []);
+  const { prices, isLoading, lastSync } = usePrices();
+  
+  // Convert Map to Array for rendering
+  const marketData = Array.from(prices.values())
+    .filter(coin => coin.coinId) // Only get entries by coinId, not duplicate symbol entries
+    .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0));
 
   const filteredData = marketData.filter(coin => {
     if (filter === "gainers") return (coin.priceChangePerc24h || 0) > 0;
@@ -86,7 +42,7 @@ export default function Market() {
           <h1 className="text-3xl font-bold">Market Overview</h1>
         </div>
         <p className="text-sm text-muted-foreground">
-          {lastUpdate ? `Updated at ${lastUpdate}` : 'Updating...'}
+          {lastSync ? `Updated at ${lastSync.toLocaleTimeString()}` : 'Updating...'}
         </p>
       </div>
 
@@ -147,7 +103,7 @@ export default function Market() {
             <tbody>
               {filteredData.map((coin, index) => (
                 <motion.tr
-                  key={coin.id}
+                  key={coin.coinId}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.03 }}
@@ -198,7 +154,7 @@ export default function Market() {
       <div className="md:hidden space-y-4">
         {filteredData.map((coin, index) => (
           <motion.div
-            key={coin.id}
+            key={coin.coinId}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}

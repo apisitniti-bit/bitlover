@@ -3,7 +3,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cryptoData } from "@/lib/mockData";
 import { Repeat, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { motion } from "framer-motion";
 import {
@@ -14,13 +13,32 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { usePrices } from "@/contexts/PriceContext";
 
 export default function Trade() {
-  const [selectedCoin, setSelectedCoin] = useState(cryptoData[0]);
+  const { prices, isLoading } = usePrices();
+  
+  // Get available coins
+  const availableCoins = Array.from(prices.values())
+    .filter(coin => coin.coinId)
+    .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0));
+  
+  const [selectedCoinId, setSelectedCoinId] = useState(availableCoins[0]?.coinId || 'bitcoin');
   const [amount, setAmount] = useState("");
   const [mode, setMode] = useState<"buy" | "sell">("buy");
 
-  const estimatedTotal = selectedCoin && amount ? (parseFloat(amount) * selectedCoin.price).toFixed(2) : "0.00";
+  const selectedCoin = prices.get(selectedCoinId);
+  const estimatedTotal = selectedCoin && amount ? (parseFloat(amount) * selectedCoin.currentPrice).toFixed(2) : "0.00";
+
+  if (isLoading || !selectedCoin) {
+    return (
+      <div className="container mx-auto px-6 py-8">
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">Loading trading data...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleTrade = () => {
     if (!amount || parseFloat(amount) <= 0) {
@@ -74,20 +92,21 @@ export default function Trade() {
               <div className="space-y-2">
                 <Label>Select Cryptocurrency</Label>
                 <Select
-                  value={selectedCoin.id}
+                  value={selectedCoinId}
                   onValueChange={(value) => {
-                    const coin = cryptoData.find(c => c.id === value);
-                    if (coin) setSelectedCoin(coin);
+                    setSelectedCoinId(value);
                   }}
                 >
                   <SelectTrigger className="glass">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {cryptoData.map(coin => (
-                      <SelectItem key={coin.id} value={coin.id}>
+                    {availableCoins.map(coin => (
+                      <SelectItem key={coin.coinId} value={coin.coinId}>
                         <div className="flex items-center gap-2">
-                          <img src={coin.logo} alt={coin.name} className="h-5 w-5 rounded-full" />
+                          <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold">
+                            {coin.symbol.slice(0, 1)}
+                          </div>
                           <span>{coin.symbol}</span>
                           <span className="text-muted-foreground">— {coin.name}</span>
                         </div>
@@ -115,13 +134,13 @@ export default function Trade() {
               <div className="glass p-4 rounded-lg">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-sm text-muted-foreground">Current Price</span>
-                  <span className="font-bold">${selectedCoin.price.toLocaleString()}</span>
+                  <span className="font-bold">${selectedCoin.currentPrice.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-muted-foreground">24h Change</span>
-                  <span className={`flex items-center gap-1 font-semibold ${selectedCoin.change_24h >= 0 ? 'text-success' : 'text-destructive'}`}>
-                    {selectedCoin.change_24h >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-                    {Math.abs(selectedCoin.change_24h).toFixed(2)}%
+                  <span className={`flex items-center gap-1 font-semibold ${(selectedCoin.priceChangePerc24h || 0) >= 0 ? 'text-success' : 'text-destructive'}`}>
+                    {(selectedCoin.priceChangePerc24h || 0) >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                    {Math.abs(selectedCoin.priceChangePerc24h || 0).toFixed(2)}%
                   </span>
                 </div>
               </div>
@@ -131,7 +150,7 @@ export default function Trade() {
                 <p className="text-sm text-muted-foreground mb-2">Estimated Total</p>
                 <p className="text-3xl font-bold text-gradient">${estimatedTotal}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {amount || "0"} {selectedCoin.symbol} × ${selectedCoin.price.toLocaleString()}
+                  {amount || "0"} {selectedCoin.symbol} × ${selectedCoin.currentPrice.toLocaleString()}
                 </p>
               </div>
 
@@ -164,11 +183,9 @@ export default function Trade() {
         >
           <Card className="glass p-6">
             <div className="flex items-center gap-3 mb-6">
-              <img
-                src={selectedCoin.logo}
-                alt={selectedCoin.name}
-                className="h-16 w-16 rounded-full"
-              />
+              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center font-bold text-2xl">
+                {selectedCoin.symbol.slice(0, 2)}
+              </div>
               <div>
                 <h2 className="text-2xl font-bold">{selectedCoin.name}</h2>
                 <p className="text-muted-foreground">{selectedCoin.symbol}</p>
@@ -179,24 +196,24 @@ export default function Trade() {
               <div className="glass p-4 rounded-lg">
                 <p className="text-sm text-muted-foreground mb-1">Your Holdings</p>
                 <p className="text-xl font-bold">
-                  {selectedCoin.quantity.toLocaleString()} {selectedCoin.symbol}
+                  1.00 {selectedCoin.symbol}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  ≈ ${(selectedCoin.quantity * selectedCoin.price).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  ≈ ${selectedCoin.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </p>
               </div>
 
               <div className="glass p-4 rounded-lg">
                 <p className="text-sm text-muted-foreground mb-1">Market Cap</p>
                 <p className="text-xl font-bold">
-                  ${(selectedCoin.marketCap / 1e9).toFixed(2)}B
+                  ${selectedCoin.marketCap ? (selectedCoin.marketCap / 1e9).toFixed(2) + 'B' : 'N/A'}
                 </p>
               </div>
 
               <div className="glass p-4 rounded-lg">
                 <p className="text-sm text-muted-foreground mb-1">24h Volume</p>
                 <p className="text-xl font-bold">
-                  ${(selectedCoin.volume / 1e9).toFixed(2)}B
+                  ${selectedCoin.volume24h ? (selectedCoin.volume24h / 1e9).toFixed(2) + 'B' : 'N/A'}
                 </p>
               </div>
 

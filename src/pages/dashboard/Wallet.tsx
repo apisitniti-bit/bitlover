@@ -1,11 +1,32 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { cryptoData } from "@/lib/mockData";
 import { ArrowUpRight, ArrowDownRight, ArrowDownToLine, ArrowUpFromLine, Repeat, TrendingUp, Coins } from "lucide-react";
 import { motion } from "framer-motion";
 import { Sparkline } from "@/components/Sparkline";
+import { usePrices } from "@/contexts/PriceContext";
 
 export default function Wallet() {
+  const { prices, isLoading } = usePrices();
+  
+  // Convert prices Map to array and add demo quantities
+  const walletCoins = Array.from(prices.values())
+    .filter(coin => coin.coinId)
+    .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0))
+    .map(coin => ({
+      ...coin,
+      quantity: 1 // Demo: 1 unit of each coin
+    }));
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto px-6 py-8">
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">Loading wallet data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-6 py-8">
       <div className="flex items-center justify-between mb-6">
@@ -41,11 +62,11 @@ export default function Wallet() {
               </tr>
             </thead>
             <tbody>
-              {cryptoData.map((coin, index) => {
-                const totalValue = coin.price * coin.quantity;
+              {walletCoins.map((coin, index) => {
+                const totalValue = coin.currentPrice * coin.quantity;
                 return (
                   <motion.tr
-                    key={coin.id}
+                    key={coin.coinId}
                     initial={{ opacity: 0, x: -20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.05 }}
@@ -53,11 +74,9 @@ export default function Wallet() {
                   >
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <img
-                          src={coin.logo}
-                          alt={coin.name}
-                          className="h-8 w-8 rounded-full"
-                        />
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-xs">
+                          {coin.symbol.slice(0, 2)}
+                        </div>
                         <div>
                           <p className="font-semibold">{coin.symbol}</p>
                           <p className="text-sm text-muted-foreground">{coin.name}</p>
@@ -65,7 +84,7 @@ export default function Wallet() {
                       </div>
                     </td>
                     <td className="p-4 text-right font-semibold">
-                      ${coin.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                      ${coin.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="p-4 text-right">
                       {coin.quantity.toLocaleString()} {coin.symbol}
@@ -74,14 +93,14 @@ export default function Wallet() {
                       ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td className="p-4 text-right">
-                      <div className={`inline-flex items-center gap-1 font-semibold ${coin.change_24h >= 0 ? 'text-success' : 'text-destructive'}`}>
-                        {coin.change_24h >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-                        {Math.abs(coin.change_24h).toFixed(2)}%
+                      <div className={`inline-flex items-center gap-1 font-semibold ${(coin.priceChangePerc24h || 0) >= 0 ? 'text-success' : 'text-destructive'}`}>
+                        {(coin.priceChangePerc24h || 0) >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                        {Math.abs(coin.priceChangePerc24h || 0).toFixed(2)}%
                       </div>
                     </td>
                     <td className="p-4">
                       <div className="h-12 w-24 mx-auto">
-                        <Sparkline change={coin.change_24h} />
+                        <Sparkline change={coin.priceChangePerc24h || 0} />
                       </div>
                     </td>
                     <td className="p-4">
@@ -107,11 +126,11 @@ export default function Wallet() {
 
       {/* Mobile Card View */}
       <div className="md:hidden space-y-4">
-        {cryptoData.map((coin, index) => {
-          const totalValue = coin.price * coin.quantity;
+        {walletCoins.map((coin, index) => {
+          const totalValue = coin.currentPrice * coin.quantity;
           return (
             <motion.div
-              key={coin.id}
+              key={coin.coinId}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.05 }}
@@ -119,26 +138,24 @@ export default function Wallet() {
               <Card className="glass p-4">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <img
-                      src={coin.logo}
-                      alt={coin.name}
-                      className="h-10 w-10 rounded-full"
-                    />
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold">
+                      {coin.symbol.slice(0, 2)}
+                    </div>
                     <div>
                       <p className="font-bold">{coin.symbol}</p>
                       <p className="text-sm text-muted-foreground">{coin.name}</p>
                     </div>
                   </div>
-                  <div className={`flex items-center gap-1 text-sm font-semibold ${coin.change_24h >= 0 ? 'text-success' : 'text-destructive'}`}>
-                    {coin.change_24h >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-                    {Math.abs(coin.change_24h).toFixed(2)}%
+                  <div className={`flex items-center gap-1 text-sm font-semibold ${(coin.priceChangePerc24h || 0) >= 0 ? 'text-success' : 'text-destructive'}`}>
+                    {(coin.priceChangePerc24h || 0) >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                    {Math.abs(coin.priceChangePerc24h || 0).toFixed(2)}%
                   </div>
                 </div>
                 
                 <div className="space-y-2 mb-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Price</span>
-                    <span className="font-semibold">${coin.price.toLocaleString()}</span>
+                    <span className="font-semibold">${coin.currentPrice.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Quantity</span>
@@ -151,7 +168,7 @@ export default function Wallet() {
                 </div>
                 
                 <div className="h-12 mb-3">
-                  <Sparkline change={coin.change_24h} />
+                  <Sparkline change={coin.priceChangePerc24h || 0} />
                 </div>
                 
                 <div className="flex gap-2">

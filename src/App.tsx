@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { PriceProvider } from "@/contexts/PriceContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Landing from "./pages/Landing";
 import Login from "./pages/auth/Login";
@@ -24,10 +25,11 @@ const App = () => {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <AuthProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Sonner />
-              <Routes>
+            <PriceProvider syncInterval={10000}>
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
+                <Routes>
                 <Route path="/" element={<Landing />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
@@ -47,6 +49,7 @@ const App = () => {
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </TooltipProvider>
+            </PriceProvider>
           </AuthProvider>
         </ThemeProvider>
       </QueryClientProvider>
