@@ -20,7 +20,7 @@ const queryClient = new QueryClient();
 
 const App = () => {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <AuthProvider>
