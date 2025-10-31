@@ -205,4 +205,47 @@ export const authController = {
       res.status(500).json({ error: 'Failed to update profile' });
     }
   },
+
+  // Reset password
+  resetPassword: [
+    body('email').isEmail().withMessage('Invalid email address'),
+    body('newPassword').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
+    
+    async (req: Request, res: Response): Promise<void> => {
+      try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+          res.status(400).json({ errors: errors.array() });
+          return;
+        }
+
+        const { email, newPassword } = req.body;
+
+        // Find user by email
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (!user) {
+          res.status(404).json({ error: 'No account found with this email address' });
+          return;
+        }
+
+        // Hash new password
+        const hashedPassword = await hashPassword(newPassword);
+
+        // Update password in database
+        await prisma.user.update({
+          where: { email },
+          data: { password: hashedPassword },
+        });
+
+        console.log(`✅ Password reset successful for user: ${email}`);
+
+        res.json({
+          message: 'Password reset successful. You can now log in with your new password.',
+        });
+      } catch (error) {
+        console.error('Reset password error:', error);
+        res.status(500).json({ error: 'Failed to reset password. Please try again.' });
+      }
+    },
+  ],
 };
