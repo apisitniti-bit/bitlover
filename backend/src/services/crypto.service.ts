@@ -61,6 +61,10 @@ export interface CoinDetail extends CoinPrice {
 export const cryptoService = {
   // Get current prices for multiple coins
   async getPrices(symbols: string[]): Promise<CoinPrice[]> {
+    if (!symbols || symbols.length === 0) {
+      return [];
+    }
+
     const cacheKey = `prices_${symbols.join('_')}`;
     const cached = getCachedData(cacheKey);
     if (cached) return cached;

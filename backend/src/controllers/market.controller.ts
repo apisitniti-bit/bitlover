@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import axios from 'axios';
 import { cryptoService } from '../services/crypto.service';
 import { prisma } from '../server';
 
@@ -65,12 +66,29 @@ export const marketController = {
   async getTopCoins(req: Request, res: Response): Promise<void> {
     try {
       const limit = parseInt(req.query.limit as string) || 100;
+      
+      // Validate limit
+      if (limit < 1 || limit > 250) {
+        res.status(400).json({ error: 'Limit must be between 1 and 250' });
+        return;
+      }
+
       const topCoins = await cryptoService.getTopCoins(limit);
 
       res.json(topCoins);
     } catch (error) {
       console.error('Get top coins error:', error);
-      res.status(500).json({ error: 'Failed to fetch top cryptocurrencies' });
+      
+      // Check if it's a rate limit error from CoinGecko
+      if (axios.isAxiosError(error) && error.response?.status === 429) {
+        res.status(429).json({ error: 'Rate limit exceeded. Please try again later.' });
+        return;
+      }
+      
+      res.status(500).json({ 
+        error: 'Failed to fetch top cryptocurrencies',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   },
 

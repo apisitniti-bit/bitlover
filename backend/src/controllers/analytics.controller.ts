@@ -352,8 +352,15 @@ export const analyticsController = {
 
       const symbols = [...new Set(allAssets.map(a => a.symbol))];
 
-      // Get current prices
-      const prices = await cryptoService.getPrices(symbols);
+      // Get current prices (with error handling)
+      let prices: any[] = [];
+      try {
+        prices = await cryptoService.getPrices(symbols);
+      } catch (priceError) {
+        console.error('Failed to fetch prices for symbols:', symbols, priceError);
+        // Continue with empty prices - will use 0 for currentPrice
+      }
+      
       const priceMap = new Map(prices.map(p => [p.symbol, p]));
 
       // Calculate value for each asset and prepare response
@@ -386,7 +393,10 @@ export const analyticsController = {
       res.json(topHoldings);
     } catch (error) {
       console.error('Get top holdings error:', error);
-      res.status(500).json({ error: 'Failed to fetch top holdings' });
+      res.status(500).json({ 
+        error: 'Failed to fetch top holdings',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   },
 };
