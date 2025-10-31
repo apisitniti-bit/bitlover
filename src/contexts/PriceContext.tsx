@@ -11,6 +11,7 @@ interface CoinPrice {
   priceChange24h: number | null;
   priceChangePerc24h: number | null;
   lastUpdated: string;
+  image?: string; // CoinGecko logo URL
 }
 
 interface PriceContextType {
@@ -47,11 +48,33 @@ export const PriceProvider: React.FC<PriceProviderProps> = ({
       if (response.data.success && response.data.data) {
         const priceMap = new Map<string, CoinPrice>();
         
+        // Logo mapping for popular coins
+        const logoMap: Record<string, string> = {
+          'bitcoin': 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png',
+          'ethereum': 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
+          'tether': 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
+          'binancecoin': 'https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png',
+          'solana': 'https://assets.coingecko.com/coins/images/4128/small/solana.png',
+          'ripple': 'https://assets.coingecko.com/coins/images/44/small/xrp-symbol-white-128.png',
+          'usd-coin': 'https://assets.coingecko.com/coins/images/6319/small/USD_Coin_icon.png',
+          'cardano': 'https://assets.coingecko.com/coins/images/975/small/cardano.png',
+          'dogecoin': 'https://assets.coingecko.com/coins/images/5/small/dogecoin.png',
+          'tron': 'https://assets.coingecko.com/coins/images/1094/small/tron-logo.png',
+          'avalanche-2': 'https://assets.coingecko.com/coins/images/12559/small/Avalanche_Circle_RedWhite_Trans.png',
+          'polkadot': 'https://assets.coingecko.com/coins/images/12171/small/polkadot.png',
+          'chainlink': 'https://assets.coingecko.com/coins/images/877/small/chainlink-new-logo.png',
+          'matic-network': 'https://assets.coingecko.com/coins/images/4713/small/matic-token-icon.png',
+          'litecoin': 'https://assets.coingecko.com/coins/images/2/small/litecoin.png',
+        };
+        
         response.data.data.forEach((coin: CoinPrice) => {
-          // Store by coinId (e.g., 'bitcoin')
-          priceMap.set(coin.coinId, coin);
-          // Also store by symbol (e.g., 'BTC') for easy lookup
-          priceMap.set(coin.symbol.toUpperCase(), coin);
+          // Only store by coinId to avoid duplicates
+          // Add logo URL if available
+          const coinWithLogo = {
+            ...coin,
+            image: logoMap[coin.coinId] || undefined
+          };
+          priceMap.set(coin.coinId, coinWithLogo);
         });
         
         setPrices(priceMap);
@@ -78,7 +101,14 @@ export const PriceProvider: React.FC<PriceProviderProps> = ({
   };
 
   const getPriceBySymbol = (symbol: string): CoinPrice | undefined => {
-    return prices.get(symbol.toUpperCase());
+    // Search through all coins to find by symbol
+    const upperSymbol = symbol.toUpperCase();
+    for (const coin of prices.values()) {
+      if (coin.symbol.toUpperCase() === upperSymbol) {
+        return coin;
+      }
+    }
+    return undefined;
   };
 
   const getPriceByCoinId = (coinId: string): CoinPrice | undefined => {

@@ -4,8 +4,26 @@ import { Card } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TrendingUp, Shield, Zap, Heart } from "lucide-react";
 import { motion } from "framer-motion";
+import { usePrices } from "@/contexts/PriceContext";
 
 export default function Landing() {
+  const { prices } = usePrices();
+  
+  // Get real-time prices for preview
+  const btcPrice = prices.get('bitcoin')?.currentPrice || 0;
+  const ethPrice = prices.get('ethereum')?.currentPrice || 0;
+  const solPrice = prices.get('solana')?.currentPrice || 0;
+  
+  // Calculate portfolio value from top coins
+  const topCoins = Array.from(prices.values())
+    .filter(coin => coin.coinId)
+    .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0))
+    .slice(0, 5);
+  
+  const portfolioValue = topCoins.reduce((sum, coin) => sum + coin.currentPrice * 1, 0);
+  const averageChange = topCoins.length > 0
+    ? topCoins.reduce((sum, coin) => sum + (coin.priceChangePerc24h || 0), 0) / topCoins.length
+    : 0;
   return (
     <div className="min-h-screen">
       {/* Header */}
@@ -90,25 +108,29 @@ export default function Landing() {
                 <div className="flex justify-between items-center">
                   <div>
                     <p className="text-sm text-muted-foreground">Total Portfolio Value</p>
-                    <p className="text-4xl font-bold text-gradient">$211,871.83</p>
+                    <p className="text-4xl font-bold text-gradient">
+                      ${portfolioValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-muted-foreground">24h Change</p>
-                    <p className="text-2xl font-semibold text-success">+1.95%</p>
+                    <p className={`text-2xl font-semibold ${averageChange >= 0 ? 'text-success' : 'text-destructive'}`}>
+                      {averageChange >= 0 ? '+' : ''}{averageChange.toFixed(2)}%
+                    </p>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4 pt-4">
                   <div className="glass p-4 rounded-lg">
                     <p className="text-xs text-muted-foreground">BTC</p>
-                    <p className="font-semibold">$67,350</p>
+                    <p className="font-semibold">${btcPrice.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
                   </div>
                   <div className="glass p-4 rounded-lg">
                     <p className="text-xs text-muted-foreground">ETH</p>
-                    <p className="font-semibold">$3,270</p>
+                    <p className="font-semibold">${ethPrice.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
                   </div>
                   <div className="glass p-4 rounded-lg">
                     <p className="text-xs text-muted-foreground">SOL</p>
-                    <p className="font-semibold">$149.20</p>
+                    <p className="font-semibold">${solPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                 </div>
               </div>

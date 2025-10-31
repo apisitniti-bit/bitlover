@@ -104,9 +104,13 @@ export default function Trade() {
                     {availableCoins.map(coin => (
                       <SelectItem key={coin.coinId} value={coin.coinId}>
                         <div className="flex items-center gap-2">
-                          <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold">
-                            {coin.symbol.slice(0, 1)}
-                          </div>
+                          {coin.image ? (
+                            <img src={coin.image} alt={coin.name} className="h-5 w-5 rounded-full" />
+                          ) : (
+                            <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold">
+                              {coin.symbol.slice(0, 1)}
+                            </div>
+                          )}
                           <span>{coin.symbol}</span>
                           <span className="text-muted-foreground">— {coin.name}</span>
                         </div>
@@ -183,9 +187,13 @@ export default function Trade() {
         >
           <Card className="glass p-6">
             <div className="flex items-center gap-3 mb-6">
-              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center font-bold text-2xl">
-                {selectedCoin.symbol.slice(0, 2)}
-              </div>
+              {selectedCoin.image ? (
+                <img src={selectedCoin.image} alt={selectedCoin.name} className="h-16 w-16 rounded-full" />
+              ) : (
+                <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center font-bold text-2xl">
+                  {selectedCoin.symbol.slice(0, 2)}
+                </div>
+              )}
               <div>
                 <h2 className="text-2xl font-bold">{selectedCoin.name}</h2>
                 <p className="text-muted-foreground">{selectedCoin.symbol}</p>

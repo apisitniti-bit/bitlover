@@ -74,9 +74,13 @@ export default function Wallet() {
                   >
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-xs">
-                          {coin.symbol.slice(0, 2)}
-                        </div>
+                        {coin.image ? (
+                          <img src={coin.image} alt={coin.name} className="h-8 w-8 rounded-full" />
+                        ) : (
+                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-xs">
+                            {coin.symbol.slice(0, 2)}
+                          </div>
+                        )}
                         <div>
                           <p className="font-semibold">{coin.symbol}</p>
                           <p className="text-sm text-muted-foreground">{coin.name}</p>
@@ -138,9 +142,13 @@ export default function Wallet() {
               <Card className="glass p-4">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold">
-                      {coin.symbol.slice(0, 2)}
-                    </div>
+                    {coin.image ? (
+                      <img src={coin.image} alt={coin.name} className="h-10 w-10 rounded-full" />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold">
+                        {coin.symbol.slice(0, 2)}
+                      </div>
+                    )}
                     <div>
                       <p className="font-bold">{coin.symbol}</p>
                       <p className="text-sm text-muted-foreground">{coin.name}</p>

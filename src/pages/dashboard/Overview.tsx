@@ -18,7 +18,7 @@ export default function Overview() {
   const averageChange = topCoins.length > 0
     ? topCoins.reduce((sum, coin) => sum + (coin.priceChangePerc24h || 0), 0) / topCoins.length
     : 0;
-  const btcPrice = prices.get('BTC')?.currentPrice || 1;
+  const btcPrice = prices.get('bitcoin')?.currentPrice || 1;
   const btcEquivalent = totalValue / btcPrice;
 
   if (isLoading) {
@@ -93,9 +93,13 @@ export default function Overview() {
                 <Card className="glass p-6 hover:glow transition-all duration-300 hover:scale-105">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold">
-                        {coin.symbol.slice(0, 2)}
-                      </div>
+                      {coin.image ? (
+                        <img src={coin.image} alt={coin.name} className="h-10 w-10 rounded-full" />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold">
+                          {coin.symbol.slice(0, 2)}
+                        </div>
+                      )}
                       <div>
                         <p className="font-bold">{coin.symbol}</p>
                         <p className="text-sm text-muted-foreground">{coin.name}</p>
