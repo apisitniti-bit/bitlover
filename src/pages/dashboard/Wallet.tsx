@@ -1,13 +1,62 @@
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowUpRight, ArrowDownRight, ArrowDownToLine, ArrowUpFromLine, Repeat, TrendingUp, Coins } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, ArrowDownToLine, ArrowUpFromLine, Repeat, TrendingUp, Coins, History } from "lucide-react";
 import { motion } from "framer-motion";
 import { Sparkline } from "@/components/Sparkline";
 import { usePrices } from "@/contexts/PriceContext";
+import axios from "axios";
+import { toast } from "sonner";
+
+interface Transaction {
+  id: string;
+  type: string;
+  symbol: string;
+  quantity: number;
+  price: number;
+  fee: number;
+  timestamp: string;
+  notes?: string;
+}
 
 export default function Wallet() {
   const { prices, isLoading } = usePrices();
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
   
+  // Fetch transaction history
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        setLoadingTransactions(true);
+        const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+        const token = localStorage.getItem('token');
+
+        if (!token) {
+          console.log('No auth token, skipping transaction fetch');
+          return;
+        }
+
+        // Get transaction history
+        const response = await axios.get(`${apiUrl}/transactions/history`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        setTransactions(response.data || []);
+        console.log(`✅ Loaded ${response.data?.length || 0} transactions`);
+      } catch (error) {
+        console.error('Failed to fetch transactions:', error);
+        if (axios.isAxiosError(error) && error.response?.status !== 401) {
+          toast.error('Failed to load transaction history');
+        }
+      } finally {
+        setLoadingTransactions(false);
+      }
+    };
+
+    fetchTransactions();
+  }, []);
+
   // Convert prices Map to array and add demo quantities
   const walletCoins = Array.from(prices.values())
     .filter(coin => coin.coinId)
@@ -115,9 +164,6 @@ export default function Wallet() {
                         <Button size="sm" variant="ghost" className="text-xs">
                           Trade
                         </Button>
-                        <Button size="sm" variant="ghost" className="text-xs">
-                          Earn
-                        </Button>
                       </div>
                     </td>
                   </motion.tr>
@@ -182,13 +228,78 @@ export default function Wallet() {
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" className="flex-1">Buy</Button>
                   <Button size="sm" variant="ghost" className="flex-1">Trade</Button>
-                  <Button size="sm" variant="ghost" className="flex-1">Earn</Button>
                 </div>
               </Card>
             </motion.div>
           );
         })}
       </div>
+
+      {/* Transaction History Section */}
+      <Card className="glass mt-8 overflow-hidden">
+        <div className="p-6 border-b">
+          <div className="flex items-center gap-2">
+            <History className="h-5 w-5 text-primary" />
+            <h2 className="text-xl font-bold">Transaction History</h2>
+          </div>
+        </div>
+
+        {loadingTransactions ? (
+          <div className="p-8 text-center">
+            <p className="text-muted-foreground">Loading transactions...</p>
+          </div>
+        ) : transactions.length === 0 ? (
+          <div className="p-8 text-center">
+            <p className="text-muted-foreground">No transactions yet. Start trading to see your history here!</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="border-b bg-muted/30">
+                <tr className="text-left">
+                  <th className="p-4 font-semibold">Date</th>
+                  <th className="p-4 font-semibold">Type</th>
+                  <th className="p-4 font-semibold">Asset</th>
+                  <th className="p-4 font-semibold text-right">Quantity</th>
+                  <th className="p-4 font-semibold text-right">Price</th>
+                  <th className="p-4 font-semibold text-right">Total</th>
+                  <th className="p-4 font-semibold">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.map((tx, index) => (
+                  <motion.tr
+                    key={tx.id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: index * 0.05 }}
+                    className="border-b hover:bg-muted/50 transition-colors"
+                  >
+                    <td className="p-4 text-sm text-muted-foreground">
+                      {new Date(tx.timestamp).toLocaleString()}
+                    </td>
+                    <td className="p-4">
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
+                        tx.type === 'BUY' ? 'bg-success/20 text-success' : 'bg-destructive/20 text-destructive'
+                      }`}>
+                        {tx.type === 'BUY' ? <ArrowDownToLine className="h-3 w-3" /> : <ArrowUpFromLine className="h-3 w-3" />}
+                        {tx.type}
+                      </span>
+                    </td>
+                    <td className="p-4 font-semibold">{tx.symbol}</td>
+                    <td className="p-4 text-right">{tx.quantity.toLocaleString()}</td>
+                    <td className="p-4 text-right">${tx.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                    <td className="p-4 text-right font-bold">
+                      ${(tx.quantity * tx.price).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="p-4 text-sm text-muted-foreground">{tx.notes || '-'}</td>
+                  </motion.tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

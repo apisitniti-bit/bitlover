@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,9 +14,12 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { usePrices } from "@/contexts/PriceContext";
+import axios from "axios";
 
 export default function Trade() {
   const { prices, isLoading } = usePrices();
+  const [portfolioId, setPortfolioId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   
   // Get available coins
   const availableCoins = Array.from(prices.values())
@@ -30,6 +33,44 @@ export default function Trade() {
   const selectedCoin = prices.get(selectedCoinId);
   const estimatedTotal = selectedCoin && amount ? (parseFloat(amount) * selectedCoin.currentPrice).toFixed(2) : "0.00";
 
+  // Get or create portfolio on component mount
+  useEffect(() => {
+    const getOrCreatePortfolio = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+        const token = localStorage.getItem('token');
+        
+        if (!token) {
+          console.error('No auth token found');
+          return;
+        }
+
+        // Get user's portfolios
+        const response = await axios.get(`${apiUrl}/portfolios`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        if (response.data.length > 0) {
+          // Use first portfolio
+          setPortfolioId(response.data[0].id);
+        } else {
+          // Create default portfolio
+          const createResponse = await axios.post(
+            `${apiUrl}/portfolios`,
+            { name: 'My Portfolio', description: 'Default trading portfolio' },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          setPortfolioId(createResponse.data.id);
+        }
+      } catch (error) {
+        console.error('Failed to get/create portfolio:', error);
+        toast.error('Failed to initialize portfolio');
+      }
+    };
+
+    getOrCreatePortfolio();
+  }, []);
+
   if (isLoading || !selectedCoin) {
     return (
       <div className="container mx-auto px-6 py-8">
@@ -40,19 +81,66 @@ export default function Trade() {
     );
   }
 
-  const handleTrade = () => {
+  const handleTrade = async () => {
     if (!amount || parseFloat(amount) <= 0) {
       toast.error("Please enter a valid amount");
       return;
     }
-    
-    toast.success(
-      `Mock ${mode === "buy" ? "Purchase" : "Sale"} Successful!`,
-      {
-        description: `${amount} ${selectedCoin.symbol} for $${estimatedTotal}`
+
+    if (!portfolioId) {
+      toast.error("Portfolio not initialized. Please refresh the page.");
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        toast.error('Please log in to trade');
+        setIsSaving(false);
+        return;
       }
-    );
-    setAmount("");
+
+      // Save transaction to database
+      await axios.post(
+        `${apiUrl}/transactions`,
+        {
+          portfolioId,
+          type: mode.toUpperCase(),
+          symbol: selectedCoin.symbol,
+          quantity: parseFloat(amount),
+          price: selectedCoin.currentPrice,
+          fee: 0,
+          notes: `${mode === 'buy' ? 'Bought' : 'Sold'} via Trade page`
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+
+      console.log(`✅ Transaction saved: ${mode.toUpperCase()} ${amount} ${selectedCoin.symbol} at $${selectedCoin.currentPrice}`);
+
+      toast.success(
+        `${mode === "buy" ? "Purchase" : "Sale"} Successful!`,
+        {
+          description: `${amount} ${selectedCoin.symbol} for $${estimatedTotal}`
+        }
+      );
+      setAmount("");
+    } catch (error) {
+      console.error('Failed to save transaction:', error);
+      if (axios.isAxiosError(error)) {
+        const errorMsg = error.response?.data?.error || error.message;
+        toast.error(`Transaction failed: ${errorMsg}`);
+      } else {
+        toast.error('Failed to save transaction. Please try again.');
+      }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -166,14 +254,16 @@ export default function Trade() {
                     setAmount("");
                     toast.info("Trade cancelled");
                   }}
+                  disabled={isSaving}
                 >
                   Cancel
                 </Button>
                 <Button
                   onClick={handleTrade}
                   className="glow"
+                  disabled={isSaving || !portfolioId}
                 >
-                  Confirm {mode === "buy" ? "Buy" : "Sell"}
+                  {isSaving ? "Processing..." : `Confirm ${mode === "buy" ? "Buy" : "Sell"}`}
                 </Button>
               </div>
             </div>
@@ -225,11 +315,10 @@ export default function Trade() {
                 </p>
               </div>
 
-              <div className="p-4 rounded-lg bg-muted/30">
+              <div className="p-4 rounded-lg bg-primary/10">
                 <p className="text-sm text-muted-foreground">
-                  <strong>Note:</strong> This is a mock trading interface. 
-                  No real transactions are being executed. 
-                  All data and trades are simulated for demonstration purposes.
+                  <strong>Info:</strong> All trades are saved to your portfolio and transaction history. 
+                  Real-time prices from CoinGecko API update every 10 seconds.
                 </p>
               </div>
             </div>

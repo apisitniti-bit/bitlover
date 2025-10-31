@@ -168,13 +168,24 @@ export const transactionController = {
         }
       }
 
+      console.log(`✅ Transaction created: ${type} ${quantity} ${symbol} at $${price} for portfolio ${portfolioId}`);
+
       res.status(201).json({
         message: 'Transaction recorded successfully',
         transaction,
       });
     } catch (error) {
-      console.error('Create transaction error:', error);
-      res.status(500).json({ error: 'Failed to create transaction' });
+      console.error('❌ Create transaction error:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          message: error.message,
+          stack: error.stack,
+        });
+      }
+      res.status(500).json({ 
+        error: 'Failed to create transaction',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   },
 
