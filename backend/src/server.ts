@@ -29,7 +29,11 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(helmet()); // Security headers
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:8080',
+    'https://apisitniti-bit.github.io',
+  ],
   credentials: true,
 }));
 app.use(morgan('dev')); // HTTP request logger

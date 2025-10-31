@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: bitlover-api
+    runtime: node
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: cd backend && npm install && npm run build
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        value: file:./database/bitlover.db
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CRYPTO_API_BASE_URL
+        value: https://api.coingecko.com/api/v3
+      - key: CORS_ORIGIN
+        value: https://apisitniti-bit.github.io
