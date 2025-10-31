@@ -314,4 +314,79 @@ export const analyticsController = {
       res.status(500).json({ error: 'Failed to fetch ROI metrics' });
     }
   },
+
+  // Get top holdings by value
+  async getTopHoldings(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = req.user?.userId;
+      const { portfolioId, limit = 5 } = req.query;
+
+      if (!userId) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+
+      // Get user's portfolios or specific portfolio
+      const portfolios = portfolioId
+        ? await prisma.portfolio.findMany({
+            where: { id: portfolioId as string, userId },
+            include: { assets: true },
+          })
+        : await prisma.portfolio.findMany({
+            where: { userId },
+            include: { assets: true },
+          });
+
+      if (portfolios.length === 0) {
+        res.json([]); // Return empty array if no portfolios
+        return;
+      }
+
+      // Aggregate all assets
+      const allAssets = portfolios.flatMap(p => p.assets);
+      
+      if (allAssets.length === 0) {
+        res.json([]); // Return empty array if no assets
+        return;
+      }
+
+      const symbols = [...new Set(allAssets.map(a => a.symbol))];
+
+      // Get current prices
+      const prices = await cryptoService.getPrices(symbols);
+      const priceMap = new Map(prices.map(p => [p.symbol, p]));
+
+      // Calculate value for each asset and prepare response
+      const holdingsWithValue = allAssets.map(asset => {
+        const priceData = priceMap.get(asset.symbol);
+        const currentPrice = priceData?.current_price || 0;
+        const value = asset.quantity * currentPrice;
+        const priceChange24h = priceData?.price_change_percentage_24h || 0;
+
+        return {
+          symbol: asset.symbol,
+          name: asset.name,
+          quantity: asset.quantity,
+          currentPrice,
+          purchasePrice: asset.purchasePrice,
+          value,
+          priceChange24h,
+          profitLoss: value - (asset.quantity * asset.purchasePrice),
+          profitLossPercentage: asset.purchasePrice > 0 
+            ? ((currentPrice - asset.purchasePrice) / asset.purchasePrice) * 100 
+            : 0,
+        };
+      });
+
+      // Sort by value (descending) and limit
+      const topHoldings = holdingsWithValue
+        .sort((a, b) => b.value - a.value)
+        .slice(0, parseInt(limit as string));
+
+      res.json(topHoldings);
+    } catch (error) {
+      console.error('Get top holdings error:', error);
+      res.status(500).json({ error: 'Failed to fetch top holdings' });
+    }
+  },
 };

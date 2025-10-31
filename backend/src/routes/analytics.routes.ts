@@ -11,5 +11,6 @@ router.get('/portfolio-performance', analyticsController.getPortfolioPerformance
 router.get('/asset-allocation', analyticsController.getAssetAllocation);
 router.get('/profit-loss', analyticsController.getProfitLoss);
 router.get('/roi', analyticsController.getROI);
+router.get('/top-holdings', analyticsController.getTopHoldings);
 
 export default router;

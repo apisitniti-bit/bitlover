@@ -19,54 +19,120 @@ interface Transaction {
   notes?: string;
 }
 
+interface Asset {
+  id: string;
+  symbol: string;
+  name: string;
+  quantity: number;
+  purchasePrice: number;
+  purchaseDate: string;
+}
+
 export default function Wallet() {
   const { prices, isLoading } = usePrices();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
+  const [loadingAssets, setLoadingAssets] = useState(false);
+  const [portfolioId, setPortfolioId] = useState<string | null>(null);
   
-  // Fetch transaction history
+  // Fetch portfolio, assets, and transactions
   useEffect(() => {
-    const fetchTransactions = async () => {
+    const fetchWalletData = async () => {
       try {
-        setLoadingTransactions(true);
         const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
         const token = localStorage.getItem('token');
 
         if (!token) {
-          console.log('No auth token, skipping transaction fetch');
+          console.log('No auth token, skipping wallet data fetch');
           return;
         }
 
-        // Get transaction history
-        const response = await axios.get(`${apiUrl}/transactions/history`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        // First, get or create portfolio
+        try {
+          const portfolioResponse = await axios.get(`${apiUrl}/portfolios`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
 
-        setTransactions(response.data || []);
-        console.log(`✅ Loaded ${response.data?.length || 0} transactions`);
-      } catch (error) {
-        console.error('Failed to fetch transactions:', error);
-        if (axios.isAxiosError(error) && error.response?.status !== 401) {
-          toast.error('Failed to load transaction history');
+          let userPortfolioId = portfolioResponse.data[0]?.id;
+
+          if (!userPortfolioId) {
+            // Create default portfolio if none exists
+            const createResponse = await axios.post(`${apiUrl}/portfolios`, 
+              { name: 'My Portfolio', description: 'Main trading portfolio' },
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            userPortfolioId = createResponse.data.id;
+            console.log('✅ Created new portfolio:', userPortfolioId);
+          }
+
+          setPortfolioId(userPortfolioId);
+
+          // Fetch assets for the portfolio
+          setLoadingAssets(true);
+          const assetsResponse = await axios.get(`${apiUrl}/assets/portfolio/${userPortfolioId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+
+          setAssets(assetsResponse.data || []);
+          console.log(`✅ Loaded ${assetsResponse.data?.length || 0} assets`);
+
+        } catch (error) {
+          console.error('Failed to fetch portfolio/assets:', error);
+          if (axios.isAxiosError(error) && error.response?.status !== 401) {
+            toast.error('Failed to load wallet assets');
+          }
+        } finally {
+          setLoadingAssets(false);
         }
-      } finally {
-        setLoadingTransactions(false);
+
+        // Fetch transaction history
+        setLoadingTransactions(true);
+        try {
+          const transactionsResponse = await axios.get(`${apiUrl}/transactions/history`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+
+          setTransactions(transactionsResponse.data || []);
+          console.log(`✅ Loaded ${transactionsResponse.data?.length || 0} transactions`);
+        } catch (error) {
+          console.error('Failed to fetch transactions:', error);
+          if (axios.isAxiosError(error) && error.response?.status !== 401) {
+            toast.error('Failed to load transaction history');
+          }
+        } finally {
+          setLoadingTransactions(false);
+        }
+
+      } catch (error) {
+        console.error('Wallet data fetch error:', error);
       }
     };
 
-    fetchTransactions();
+    fetchWalletData();
   }, []);
 
-  // Convert prices Map to array and add demo quantities
-  const walletCoins = Array.from(prices.values())
-    .filter(coin => coin.coinId)
-    .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0))
-    .map(coin => ({
-      ...coin,
-      quantity: 1 // Demo: 1 unit of each coin
-    }));
+  // Merge assets with price data
+  const walletCoins = assets
+    .map(asset => {
+      const priceData = prices.get(asset.symbol.toLowerCase()) || 
+                       Array.from(prices.values()).find(p => p.symbol === asset.symbol);
+      
+      return {
+        ...asset,
+        coinId: priceData?.coinId || asset.symbol.toLowerCase(),
+        name: asset.name || asset.symbol,
+        symbol: asset.symbol,
+        quantity: asset.quantity,
+        currentPrice: priceData?.currentPrice || 0,
+        priceChangePerc24h: priceData?.priceChangePerc24h || 0,
+        marketCap: priceData?.marketCap || 0,
+        image: priceData?.image || null,
+      };
+    })
+    .filter(coin => coin.quantity > 0); // Only show assets with balance
 
-  if (isLoading) {
+  if (isLoading || loadingAssets) {
     return (
       <div className="container mx-auto px-6 py-8">
         <div className="flex items-center justify-center h-64">
@@ -95,23 +161,39 @@ export default function Wallet() {
         </div>
       </div>
 
+      {/* Empty State */}
+      {walletCoins.length === 0 && !loadingAssets && (
+        <Card className="glass p-12 text-center mb-8">
+          <Coins className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+          <h3 className="text-xl font-bold mb-2">Your Wallet is Empty</h3>
+          <p className="text-muted-foreground mb-4">
+            Start trading to add assets to your wallet!
+          </p>
+          <Button className="gap-2">
+            <Repeat className="h-4 w-4" />
+            Go to Trade
+          </Button>
+        </Card>
+      )}
+
       {/* Desktop Table View */}
-      <Card className="glass hidden md:block overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="border-b">
-              <tr className="text-left">
-                <th className="p-4 font-semibold">Asset</th>
-                <th className="p-4 font-semibold text-right">Price</th>
-                <th className="p-4 font-semibold text-right">Quantity</th>
-                <th className="p-4 font-semibold text-right">Total Value</th>
-                <th className="p-4 font-semibold text-right">24h Change</th>
-                <th className="p-4 font-semibold text-center">Trend</th>
-                <th className="p-4 font-semibold text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {walletCoins.map((coin, index) => {
+      {walletCoins.length > 0 && (
+        <Card className="glass hidden md:block overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="border-b">
+                <tr className="text-left">
+                  <th className="p-4 font-semibold">Asset</th>
+                  <th className="p-4 font-semibold text-right">Price</th>
+                  <th className="p-4 font-semibold text-right">Quantity</th>
+                  <th className="p-4 font-semibold text-right">Total Value</th>
+                  <th className="p-4 font-semibold text-right">24h Change</th>
+                  <th className="p-4 font-semibold text-center">Trend</th>
+                  <th className="p-4 font-semibold text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {walletCoins.map((coin, index) => {
                 const totalValue = coin.currentPrice * coin.quantity;
                 return (
                   <motion.tr
@@ -173,10 +255,12 @@ export default function Wallet() {
           </table>
         </div>
       </Card>
+      )}
 
       {/* Mobile Card View */}
-      <div className="md:hidden space-y-4">
-        {walletCoins.map((coin, index) => {
+      {walletCoins.length > 0 && (
+        <div className="md:hidden space-y-4">
+          {walletCoins.map((coin, index) => {
           const totalValue = coin.currentPrice * coin.quantity;
           return (
             <motion.div
@@ -233,7 +317,8 @@ export default function Wallet() {
             </motion.div>
           );
         })}
-      </div>
+        </div>
+      )}
 
       {/* Transaction History Section */}
       <Card className="glass mt-8 overflow-hidden">
