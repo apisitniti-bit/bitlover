@@ -29,11 +29,28 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(helmet()); // Security headers
 app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'http://localhost:8080',
-    'https://apisitniti-bit.github.io',
-  ],
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, postman)
+    if (!origin) return callback(null, true);
+    
+    // Allow localhost and local network IPs for development
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://localhost:8080',
+      'https://apisitniti-bit.github.io',
+    ];
+    
+    // Also allow any local network IP address (192.168.x.x, 10.x.x.x, etc.)
+    if (origin.match(/^https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+):\d+$/)) {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    }
+    
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
 }));
 app.use(morgan('dev')); // HTTP request logger
