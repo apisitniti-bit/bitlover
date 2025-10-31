@@ -1,13 +1,20 @@
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TrendingUp, Shield, Zap, Heart } from "lucide-react";
 import { motion } from "framer-motion";
 import { usePrices } from "@/contexts/PriceContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Landing() {
   const { prices } = usePrices();
+  const { isAuthenticated } = useAuth();
+
+  // Redirect authenticated users to dashboard
+  if (isAuthenticated) {
+    return <Navigate to="/dashboard" replace />;
+  }
   
   // Get real-time prices for preview
   const btcPrice = prices.get('bitcoin')?.currentPrice || 0;
