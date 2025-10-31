@@ -43,9 +43,11 @@ export const PriceProvider: React.FC<PriceProviderProps> = ({
   const fetchPrices = async () => {
     try {
       const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
-      const response = await axios.get(`${apiUrl}/market/live`);
+      const response = await axios.get(`${apiUrl}/market/live`, {
+        timeout: 15000, // 15 second timeout for price fetching
+      });
       
-      if (response.data.success && response.data.data) {
+      if (response?.data?.success && Array.isArray(response.data.data)) {
         const priceMap = new Map<string, CoinPrice>();
         
         // Logo mapping for popular coins
@@ -67,32 +69,59 @@ export const PriceProvider: React.FC<PriceProviderProps> = ({
           'litecoin': 'https://assets.coingecko.com/coins/images/2/small/litecoin.png',
         };
         
-        response.data.data.forEach((coin: CoinPrice) => {
-          // Only store by coinId to avoid duplicates
-          // Add logo URL if available
-          const coinWithLogo = {
-            ...coin,
-            image: logoMap[coin.coinId] || undefined
-          };
-          priceMap.set(coin.coinId, coinWithLogo);
+        response.data.data.forEach((coin: any) => {
+          // Validate coin data before adding
+          if (coin && coin.coinId && coin.symbol && typeof coin.currentPrice === 'number') {
+            // Only store by coinId to avoid duplicates
+            // Add logo URL if available
+            const coinWithLogo: CoinPrice = {
+              coinId: coin.coinId,
+              symbol: coin.symbol,
+              name: coin.name || coin.symbol,
+              currentPrice: coin.currentPrice,
+              marketCap: coin.marketCap ?? null,
+              volume24h: coin.volume24h ?? null,
+              priceChange24h: coin.priceChange24h ?? null,
+              priceChangePerc24h: coin.priceChangePerc24h ?? null,
+              lastUpdated: coin.lastUpdated || new Date().toISOString(),
+              image: logoMap[coin.coinId] || coin.image || undefined,
+            };
+            priceMap.set(coin.coinId, coinWithLogo);
+          }
         });
         
-        setPrices(priceMap);
-        setLastSync(new Date());
-        setError(null);
-        
-        console.log(
-          `✅ [${new Date().toISOString()}] Prices synced: ${response.data.data.length} coins`
-        );
+        if (priceMap.size > 0) {
+          setPrices(priceMap);
+          setLastSync(new Date());
+          setError(null);
+          
+          console.log(
+            `✅ [${new Date().toISOString()}] Prices synced: ${priceMap.size} coins`
+          );
+        } else {
+          console.warn('⚠️ No valid price data received');
+        }
+      } else {
+        console.warn('⚠️ Invalid response format from price API');
       }
     } catch (err) {
       const errorMessage = axios.isAxiosError(err) 
-        ? err.message 
+        ? `Price fetch error: ${err.message}${err.response ? ` (${err.response.status})` : ''}`
         : 'Failed to fetch prices';
       setError(errorMessage);
       console.error('❌ Price fetch error:', err);
+      
+      // Don't set isLoading to false on first error to allow retry
+      if (prices.size === 0) {
+        // First load failed, keep trying
+        console.log('🔄 Retrying price fetch in 5 seconds...');
+        setTimeout(fetchPrices, 5000);
+      }
     } finally {
-      setIsLoading(false);
+      // Only set loading to false if we have some data or this isn't the first load
+      if (prices.size > 0 || !isLoading) {
+        setIsLoading(false);
+      }
     }
   };
 

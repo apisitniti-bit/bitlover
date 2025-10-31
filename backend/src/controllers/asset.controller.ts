@@ -97,13 +97,27 @@ export const assetController = {
         return;
       }
 
+      // Validate numbers
+      const quantityNum = parseFloat(quantity);
+      const priceNum = parseFloat(purchasePrice);
+
+      if (isNaN(quantityNum) || quantityNum <= 0) {
+        res.status(400).json({ error: 'Invalid quantity. Must be a positive number.' });
+        return;
+      }
+
+      if (isNaN(priceNum) || priceNum < 0) {
+        res.status(400).json({ error: 'Invalid purchase price. Must be a non-negative number.' });
+        return;
+      }
+
       const asset = await prisma.asset.create({
         data: {
           portfolioId,
           symbol: symbol.toUpperCase(),
           name,
-          quantity: parseFloat(quantity),
-          purchasePrice: parseFloat(purchasePrice),
+          quantity: quantityNum,
+          purchasePrice: priceNum,
           purchaseDate: purchaseDate ? new Date(purchaseDate) : new Date(),
         },
       });
@@ -114,8 +128,8 @@ export const assetController = {
           portfolioId,
           type: 'BUY',
           symbol: symbol.toUpperCase(),
-          quantity: parseFloat(quantity),
-          price: parseFloat(purchasePrice),
+          quantity: quantityNum,
+          price: priceNum,
           timestamp: purchaseDate ? new Date(purchaseDate) : new Date(),
         },
       });

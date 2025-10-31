@@ -100,14 +100,57 @@ export const transactionController = {
         return;
       }
 
+      // Additional validation for numbers
+      const quantityNum = parseFloat(quantity);
+      const priceNum = parseFloat(price);
+      
+      if (isNaN(quantityNum) || quantityNum <= 0) {
+        res.status(400).json({ error: 'Invalid quantity. Must be a positive number.' });
+        return;
+      }
+
+      if (isNaN(priceNum) || priceNum <= 0) {
+        res.status(400).json({ error: 'Invalid price. Must be a positive number.' });
+        return;
+      }
+
+      // For SELL transactions, verify user has sufficient balance
+      if (type.toUpperCase() === 'SELL') {
+        const existingAsset = await prisma.asset.findFirst({
+          where: { portfolioId, symbol: symbol.toUpperCase() },
+        });
+
+        if (!existingAsset) {
+          res.status(400).json({ 
+            error: 'Cannot sell asset you do not own',
+            details: `No ${symbol.toUpperCase()} found in portfolio`
+          });
+          return;
+        }
+
+        if (existingAsset.quantity < quantityNum) {
+          res.status(400).json({ 
+            error: 'Insufficient balance',
+            details: `Available: ${existingAsset.quantity}, Requested: ${quantityNum}`
+          });
+          return;
+        }
+      }
+
+      const feeNum = fee ? parseFloat(fee) : 0;
+      if (fee && (isNaN(feeNum) || feeNum < 0)) {
+        res.status(400).json({ error: 'Invalid fee. Must be a non-negative number.' });
+        return;
+      }
+
       const transaction = await prisma.transaction.create({
         data: {
           portfolioId,
           type: type.toUpperCase(),
           symbol: symbol.toUpperCase(),
-          quantity: parseFloat(quantity),
-          price: parseFloat(price),
-          fee: fee ? parseFloat(fee) : 0,
+          quantity: quantityNum,
+          price: priceNum,
+          fee: feeNum,
           timestamp: timestamp ? new Date(timestamp) : new Date(),
           notes: notes || null,
         },
@@ -121,10 +164,10 @@ export const transactionController = {
 
         if (existingAsset) {
           // Update existing asset
-          const newQuantity = existingAsset.quantity + parseFloat(quantity);
+          const newQuantity = existingAsset.quantity + quantityNum;
           const newAvgPrice = (
             (existingAsset.quantity * existingAsset.purchasePrice) + 
-            (parseFloat(quantity) * parseFloat(price))
+            (quantityNum * priceNum)
           ) / newQuantity;
 
           await prisma.asset.update({
@@ -141,19 +184,19 @@ export const transactionController = {
               portfolioId,
               symbol: symbol.toUpperCase(),
               name: symbol.toUpperCase(),
-              quantity: parseFloat(quantity),
-              purchasePrice: parseFloat(price),
+              quantity: quantityNum,
+              purchasePrice: priceNum,
             },
           });
         }
       } else if (type.toUpperCase() === 'SELL') {
-        // Reduce asset quantity
+        // Reduce asset quantity (already validated to exist above)
         const existingAsset = await prisma.asset.findFirst({
           where: { portfolioId, symbol: symbol.toUpperCase() },
         });
 
         if (existingAsset) {
-          const newQuantity = existingAsset.quantity - parseFloat(quantity);
+          const newQuantity = existingAsset.quantity - quantityNum;
           
           if (newQuantity <= 0) {
             // Delete asset if quantity is zero or negative

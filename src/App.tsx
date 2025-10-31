@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { PriceProvider } from "@/contexts/PriceContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import Landing from "./pages/Landing";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
@@ -21,15 +22,16 @@ const queryClient = new QueryClient();
 
 const App = () => {
   return (
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <AuthProvider>
-            <PriceProvider syncInterval={10000}>
-              <TooltipProvider>
-                <Toaster />
-                <Sonner />
-                <Routes>
+    <ErrorBoundary>
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
+        <QueryClientProvider client={queryClient}>
+          <ThemeProvider>
+            <AuthProvider>
+              <PriceProvider syncInterval={10000}>
+                <TooltipProvider>
+                  <Toaster />
+                  <Sonner />
+                  <Routes>
                 <Route path="/" element={<Landing />} />
                 <Route path="/login" element={<Login />} />
                 <Route path="/register" element={<Register />} />
@@ -54,6 +56,7 @@ const App = () => {
         </ThemeProvider>
       </QueryClientProvider>
     </BrowserRouter>
+    </ErrorBoundary>
   );
 };
 
