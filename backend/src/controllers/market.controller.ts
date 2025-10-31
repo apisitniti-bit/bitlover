@@ -1,7 +1,27 @@
 import { Request, Response } from 'express';
 import { cryptoService } from '../services/crypto.service';
+import { prisma } from '../server';
 
 export const marketController = {
+  // Get all market prices from database (synced in real-time)
+  async getMarketPrices(_req: Request, res: Response): Promise<void> {
+    try {
+      const prices = await prisma.marketPrice.findMany({
+        orderBy: { marketCap: 'desc' },
+      });
+
+      res.json({
+        success: true,
+        count: prices.length,
+        lastUpdated: prices[0]?.lastUpdated || null,
+        data: prices,
+      });
+    } catch (error) {
+      console.error('Get market prices error:', error);
+      res.status(500).json({ error: 'Failed to fetch market prices' });
+    }
+  },
+
   // Get current prices for multiple coins
   async getPrices(req: Request, res: Response): Promise<void> {
     try {

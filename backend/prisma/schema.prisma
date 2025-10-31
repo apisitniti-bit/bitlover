@@ -122,3 +122,37 @@ model UserSettings {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+// CoinList model - Tracks supported cryptocurrencies
+model CoinList {
+  id          String   @id @default(uuid())
+  coinId      String   @unique // CoinGecko ID (e.g., 'bitcoin', 'ethereum')
+  symbol      String
+  name        String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([coinId])
+  @@index([symbol])
+  @@index([isActive])
+}
+
+// MarketPrice model - Stores real-time cryptocurrency prices
+model MarketPrice {
+  id                String   @id @default(uuid())
+  coinId            String   @unique // CoinGecko ID
+  symbol            String
+  name              String
+  currentPrice      Float
+  marketCap         Float?
+  volume24h         Float?
+  priceChange24h    Float?
+  priceChangePerc24h Float?
+  lastUpdated       DateTime @default(now())
+  createdAt         DateTime @default(now())
+
+  @@index([coinId])
+  @@index([symbol])
+  @@index([lastUpdated])
+}

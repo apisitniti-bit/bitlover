@@ -16,6 +16,9 @@ import watchlistRoutes from './routes/watchlist.routes';
 import alertRoutes from './routes/alert.routes';
 import analyticsRoutes from './routes/analytics.routes';
 
+// Import price sync service
+import { priceSyncService } from './services/price-sync.service';
+
 // Load environment variables
 dotenv.config();
 
@@ -89,21 +92,26 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+  
+  // Start price sync service
+  await priceSyncService.start();
 });
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\n👋 Shutting down gracefully...');
+  priceSyncService.stop();
   await prisma.$disconnect();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   console.log('\n👋 Shutting down gracefully...');
+  priceSyncService.stop();
   await prisma.$disconnect();
   process.exit(0);
 });

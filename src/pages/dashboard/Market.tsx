@@ -1,22 +1,82 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { cryptoData } from "@/lib/mockData";
 import { ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Activity } from "lucide-react";
 import { motion } from "framer-motion";
 import { Sparkline } from "@/components/Sparkline";
 import { cn } from "@/lib/utils";
+import axios from "axios";
 
 type FilterType = "all" | "gainers" | "losers";
 
+interface MarketPrice {
+  id: string;
+  coinId: string;
+  symbol: string;
+  name: string;
+  currentPrice: number;
+  marketCap: number | null;
+  volume24h: number | null;
+  priceChange24h: number | null;
+  priceChangePerc24h: number | null;
+  lastUpdated: string;
+}
+
+interface MarketResponse {
+  success: boolean;
+  count: number;
+  lastUpdated: string | null;
+  data: MarketPrice[];
+}
+
 export default function Market() {
   const [filter, setFilter] = useState<FilterType>("all");
+  const [marketData, setMarketData] = useState<MarketPrice[]>([]);
+  const [lastUpdate, setLastUpdate] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(true);
 
-  const filteredData = cryptoData.filter(coin => {
-    if (filter === "gainers") return coin.change_24h > 0;
-    if (filter === "losers") return coin.change_24h < 0;
+  // Fetch market prices from API
+  const fetchMarketData = async () => {
+    try {
+      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+      const response = await axios.get<MarketResponse>(`${apiUrl}/market/live`);
+      
+      if (response.data.success) {
+        setMarketData(response.data.data);
+        if (response.data.lastUpdated) {
+          const date = new Date(response.data.lastUpdated);
+          setLastUpdate(date.toLocaleTimeString());
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch market data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch on mount and every 10 seconds
+  useEffect(() => {
+    fetchMarketData();
+    const interval = setInterval(fetchMarketData, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const filteredData = marketData.filter(coin => {
+    if (filter === "gainers") return (coin.priceChangePerc24h || 0) > 0;
+    if (filter === "losers") return (coin.priceChangePerc24h || 0) < 0;
     return true;
   });
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto px-6 py-8">
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">Loading market data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-6 py-8">
@@ -25,7 +85,9 @@ export default function Market() {
           <Activity className="h-6 w-6 text-primary" />
           <h1 className="text-3xl font-bold">Market Overview</h1>
         </div>
-        <p className="text-sm text-muted-foreground">Updated just now</p>
+        <p className="text-sm text-muted-foreground">
+          {lastUpdate ? `Updated at ${lastUpdate}` : 'Updating...'}
+        </p>
       </div>
 
       {/* Filters */}
@@ -92,15 +154,13 @@ export default function Market() {
                   className="border-b hover:bg-muted/50 transition-colors"
                 >
                   <td className="p-4 text-muted-foreground font-semibold">
-                    #{cryptoData.indexOf(coin) + 1}
+                    #{index + 1}
                   </td>
                   <td className="p-4">
                     <div className="flex items-center gap-3">
-                      <img
-                        src={coin.logo}
-                        alt={coin.name}
-                        className="h-8 w-8 rounded-full"
-                      />
+                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center font-bold">
+                        {coin.symbol.slice(0, 2)}
+                      </div>
                       <div>
                         <p className="font-semibold">{coin.symbol}</p>
                         <p className="text-sm text-muted-foreground">{coin.name}</p>
@@ -108,23 +168,23 @@ export default function Market() {
                     </div>
                   </td>
                   <td className="p-4 text-right font-semibold">
-                    ${coin.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    ${coin.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </td>
                   <td className="p-4 text-right">
-                    <div className={`inline-flex items-center gap-1 font-semibold ${coin.change_24h >= 0 ? 'text-success' : 'text-destructive'}`}>
-                      {coin.change_24h >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-                      {Math.abs(coin.change_24h).toFixed(2)}%
+                    <div className={`inline-flex items-center gap-1 font-semibold ${(coin.priceChangePerc24h || 0) >= 0 ? 'text-success' : 'text-destructive'}`}>
+                      {(coin.priceChangePerc24h || 0) >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                      {Math.abs(coin.priceChangePerc24h || 0).toFixed(2)}%
                     </div>
                   </td>
                   <td className="p-4 text-right">
-                    ${(coin.marketCap / 1e9).toFixed(2)}B
+                    ${coin.marketCap ? (coin.marketCap / 1e9).toFixed(2) + 'B' : 'N/A'}
                   </td>
                   <td className="p-4 text-right">
-                    ${(coin.volume / 1e9).toFixed(2)}B
+                    ${coin.volume24h ? (coin.volume24h / 1e9).toFixed(2) + 'B' : 'N/A'}
                   </td>
                   <td className="p-4">
                     <div className="h-12 w-32 mx-auto">
-                      <Sparkline change={coin.change_24h} />
+                      <Sparkline change={coin.priceChangePerc24h || 0} />
                     </div>
                   </td>
                 </motion.tr>
@@ -147,41 +207,39 @@ export default function Market() {
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <span className="text-sm text-muted-foreground font-semibold">
-                    #{cryptoData.indexOf(coin) + 1}
+                    #{index + 1}
                   </span>
-                  <img
-                    src={coin.logo}
-                    alt={coin.name}
-                    className="h-10 w-10 rounded-full"
-                  />
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-bold">
+                    {coin.symbol.slice(0, 2)}
+                  </div>
                   <div>
                     <p className="font-bold">{coin.symbol}</p>
                     <p className="text-sm text-muted-foreground">{coin.name}</p>
                   </div>
                 </div>
-                <div className={`flex items-center gap-1 text-sm font-semibold ${coin.change_24h >= 0 ? 'text-success' : 'text-destructive'}`}>
-                  {coin.change_24h >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-                  {Math.abs(coin.change_24h).toFixed(2)}%
+                <div className={`flex items-center gap-1 text-sm font-semibold ${(coin.priceChangePerc24h || 0) >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  {(coin.priceChangePerc24h || 0) >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                  {Math.abs(coin.priceChangePerc24h || 0).toFixed(2)}%
                 </div>
               </div>
               
               <div className="space-y-2 mb-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Price</span>
-                  <span className="font-semibold">${coin.price.toLocaleString()}</span>
+                  <span className="font-semibold">${coin.currentPrice.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Market Cap</span>
-                  <span className="font-semibold">${(coin.marketCap / 1e9).toFixed(2)}B</span>
+                  <span className="font-semibold">${coin.marketCap ? (coin.marketCap / 1e9).toFixed(2) + 'B' : 'N/A'}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Volume</span>
-                  <span className="font-semibold">${(coin.volume / 1e9).toFixed(2)}B</span>
+                  <span className="font-semibold">${coin.volume24h ? (coin.volume24h / 1e9).toFixed(2) + 'B' : 'N/A'}</span>
                 </div>
               </div>
               
               <div className="h-12">
-                <Sparkline change={coin.change_24h} />
+                <Sparkline change={coin.priceChangePerc24h || 0} />
               </div>
             </Card>
           </motion.div>
