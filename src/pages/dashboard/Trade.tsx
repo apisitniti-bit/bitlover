@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ import axios from "axios";
 
 export default function Trade() {
   const { prices, isLoading } = usePrices();
+  const [searchParams] = useSearchParams();
   const [portfolioId, setPortfolioId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -26,9 +28,20 @@ export default function Trade() {
     .filter(coin => coin.coinId)
     .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0));
   
-  const [selectedCoinId, setSelectedCoinId] = useState(availableCoins[0]?.coinId || 'bitcoin');
+  // Get coin from URL parameter or default to bitcoin
+  const coinFromUrl = searchParams.get('coin');
+  const defaultCoinId = coinFromUrl || availableCoins[0]?.coinId || 'bitcoin';
+  
+  const [selectedCoinId, setSelectedCoinId] = useState(defaultCoinId);
   const [amount, setAmount] = useState("");
   const [mode, setMode] = useState<"buy" | "sell">("buy");
+
+  // Update selected coin when URL parameter changes
+  useEffect(() => {
+    if (coinFromUrl && prices.has(coinFromUrl)) {
+      setSelectedCoinId(coinFromUrl);
+    }
+  }, [coinFromUrl, prices]);
 
   const selectedCoin = prices.get(selectedCoinId);
   const estimatedTotal = selectedCoin && amount ? (parseFloat(amount) * selectedCoin.currentPrice).toFixed(2) : "0.00";

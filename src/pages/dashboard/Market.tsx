@@ -1,28 +1,81 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Activity } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, TrendingUp, TrendingDown, Activity, Repeat } from "lucide-react";
 import { motion } from "framer-motion";
 import { Sparkline } from "@/components/Sparkline";
 import { cn } from "@/lib/utils";
-import { usePrices } from "@/contexts/PriceContext";
+import axios from "axios";
+import { toast } from "sonner";
 
 type FilterType = "all" | "gainers" | "losers";
 
+interface CoinData {
+  symbol: string;
+  name: string;
+  current_price: number;
+  price_change_24h: number;
+  price_change_percentage_24h: number;
+  market_cap: number;
+  total_volume: number;
+  high_24h: number;
+  low_24h: number;
+  image: string;
+}
+
 export default function Market() {
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<FilterType>("all");
-  const { prices, isLoading, lastSync } = usePrices();
-  
-  // Convert Map to Array for rendering
-  const marketData = Array.from(prices.values())
-    .filter(coin => coin.coinId) // Only get entries by coinId, not duplicate symbol entries
-    .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0));
+  const [marketData, setMarketData] = useState<CoinData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [lastSync, setLastSync] = useState<Date | null>(null);
+  const [highlightedCoin, setHighlightedCoin] = useState<string | null>(null);
+
+  // Fetch top 100 coins from backend
+  useEffect(() => {
+    const fetchTopCoins = async () => {
+      try {
+        setIsLoading(true);
+        const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+        
+        const response = await axios.get(`${apiUrl}/market/top?limit=100`);
+        setMarketData(response.data);
+        setLastSync(new Date());
+        console.log(`✅ Loaded ${response.data.length} coins from market`);
+      } catch (error) {
+        console.error('Failed to fetch top coins:', error);
+        toast.error('Failed to load market data');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchTopCoins();
+
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchTopCoins, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const filteredData = marketData.filter(coin => {
-    if (filter === "gainers") return (coin.priceChangePerc24h || 0) > 0;
-    if (filter === "losers") return (coin.priceChangePerc24h || 0) < 0;
+    if (filter === "gainers") return (coin.price_change_percentage_24h || 0) > 0;
+    if (filter === "losers") return (coin.price_change_percentage_24h || 0) < 0;
     return true;
   });
+
+  // Navigate to Trade page with pre-selected coin
+  const handleTradeClick = (coin: CoinData) => {
+    // Convert coin name to coinId (lowercase, no spaces)
+    const coinId = coin.name.toLowerCase().replace(/\s+/g, '-');
+    
+    // Highlight the selected coin briefly
+    setHighlightedCoin(coin.symbol);
+    setTimeout(() => setHighlightedCoin(null), 1000);
+    
+    // Navigate to trade page with coin pre-selected
+    navigate(`/dashboard/trade?coin=${coinId}&symbol=${coin.symbol}`);
+  };
 
   if (isLoading) {
     return (
@@ -37,9 +90,14 @@ export default function Market() {
   return (
     <div className="container mx-auto px-6 py-8">
       <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <Activity className="h-6 w-6 text-primary" />
-          <h1 className="text-3xl font-bold">Market Overview</h1>
+          <div>
+            <h1 className="text-3xl font-bold">Market Overview</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Top {marketData.length} cryptocurrencies by market cap
+            </p>
+          </div>
         </div>
         <p className="text-sm text-muted-foreground">
           {lastSync ? `Updated at ${lastSync.toLocaleTimeString()}` : 'Updating...'}
@@ -98,16 +156,20 @@ export default function Market() {
                 <th className="p-4 font-semibold text-right">Market Cap</th>
                 <th className="p-4 font-semibold text-right">Volume</th>
                 <th className="p-4 font-semibold text-center">Chart</th>
+                <th className="p-4 font-semibold text-center">Action</th>
               </tr>
             </thead>
             <tbody>
               {filteredData.map((coin, index) => (
                 <motion.tr
-                  key={coin.coinId}
+                  key={`${coin.symbol}-${index}`}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: index * 0.03 }}
-                  className="border-b hover:bg-muted/50 transition-colors"
+                  className={cn(
+                    "border-b hover:bg-muted/50 transition-all duration-300",
+                    highlightedCoin === coin.symbol && "bg-primary/10 ring-2 ring-primary"
+                  )}
                 >
                   <td className="p-4 text-muted-foreground font-semibold">
                     #{index + 1}
@@ -128,23 +190,36 @@ export default function Market() {
                     </div>
                   </td>
                   <td className="p-4 text-right font-semibold">
-                    ${coin.currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    ${coin.current_price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </td>
                   <td className="p-4 text-right">
-                    <div className={`inline-flex items-center gap-1 font-semibold ${(coin.priceChangePerc24h || 0) >= 0 ? 'text-success' : 'text-destructive'}`}>
-                      {(coin.priceChangePerc24h || 0) >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-                      {Math.abs(coin.priceChangePerc24h || 0).toFixed(2)}%
+                    <div className={`inline-flex items-center gap-1 font-semibold ${(coin.price_change_percentage_24h || 0) >= 0 ? 'text-success' : 'text-destructive'}`}>
+                      {(coin.price_change_percentage_24h || 0) >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                      {Math.abs(coin.price_change_percentage_24h || 0).toFixed(2)}%
                     </div>
                   </td>
                   <td className="p-4 text-right">
-                    ${coin.marketCap ? (coin.marketCap / 1e9).toFixed(2) + 'B' : 'N/A'}
+                    ${coin.market_cap ? (coin.market_cap / 1e9).toFixed(2) + 'B' : 'N/A'}
                   </td>
                   <td className="p-4 text-right">
-                    ${coin.volume24h ? (coin.volume24h / 1e9).toFixed(2) + 'B' : 'N/A'}
+                    ${coin.total_volume ? (coin.total_volume / 1e9).toFixed(2) + 'B' : 'N/A'}
                   </td>
                   <td className="p-4">
                     <div className="h-12 w-32 mx-auto">
-                      <Sparkline change={coin.priceChangePerc24h || 0} />
+                      <Sparkline change={coin.price_change_percentage_24h || 0} />
+                    </div>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex items-center justify-center">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="gap-1 text-xs"
+                        onClick={() => handleTradeClick(coin)}
+                      >
+                        <Repeat className="h-3 w-3" />
+                        Trade
+                      </Button>
                     </div>
                   </td>
                 </motion.tr>
@@ -158,12 +233,15 @@ export default function Market() {
       <div className="md:hidden space-y-4">
         {filteredData.map((coin, index) => (
           <motion.div
-            key={coin.coinId}
+            key={`${coin.symbol}-${index}`}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.05 }}
           >
-            <Card className="glass p-4">
+            <Card className={cn(
+              "glass p-4 transition-all duration-300",
+              highlightedCoin === coin.symbol && "ring-2 ring-primary bg-primary/10"
+            )}>
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <span className="text-sm text-muted-foreground font-semibold">
@@ -181,30 +259,40 @@ export default function Market() {
                     <p className="text-sm text-muted-foreground">{coin.name}</p>
                   </div>
                 </div>
-                <div className={`flex items-center gap-1 text-sm font-semibold ${(coin.priceChangePerc24h || 0) >= 0 ? 'text-success' : 'text-destructive'}`}>
-                  {(coin.priceChangePerc24h || 0) >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-                  {Math.abs(coin.priceChangePerc24h || 0).toFixed(2)}%
+                <div className={`flex items-center gap-1 text-sm font-semibold ${(coin.price_change_percentage_24h || 0) >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  {(coin.price_change_percentage_24h || 0) >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                  {Math.abs(coin.price_change_percentage_24h || 0).toFixed(2)}%
                 </div>
               </div>
               
               <div className="space-y-2 mb-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Price</span>
-                  <span className="font-semibold">${coin.currentPrice.toLocaleString()}</span>
+                  <span className="font-semibold">${coin.current_price.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Market Cap</span>
-                  <span className="font-semibold">${coin.marketCap ? (coin.marketCap / 1e9).toFixed(2) + 'B' : 'N/A'}</span>
+                  <span className="font-semibold">${coin.market_cap ? (coin.market_cap / 1e9).toFixed(2) + 'B' : 'N/A'}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Volume</span>
-                  <span className="font-semibold">${coin.volume24h ? (coin.volume24h / 1e9).toFixed(2) + 'B' : 'N/A'}</span>
+                  <span className="font-semibold">${coin.total_volume ? (coin.total_volume / 1e9).toFixed(2) + 'B' : 'N/A'}</span>
                 </div>
               </div>
               
-              <div className="h-12">
-                <Sparkline change={coin.priceChangePerc24h || 0} />
+              <div className="h-12 mb-3">
+                <Sparkline change={coin.price_change_percentage_24h || 0} />
               </div>
+
+              <Button
+                size="sm"
+                variant="default"
+                className="w-full gap-2"
+                onClick={() => handleTradeClick(coin)}
+              >
+                <Repeat className="h-4 w-4" />
+                Trade {coin.symbol}
+              </Button>
             </Card>
           </motion.div>
         ))}

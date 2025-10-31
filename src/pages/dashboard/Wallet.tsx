@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowUpRight, ArrowDownRight, ArrowDownToLine, ArrowUpFromLine, Repeat, TrendingUp, Coins, History } from "lucide-react";
@@ -30,6 +31,7 @@ interface Asset {
 
 export default function Wallet() {
   const { prices, isLoading } = usePrices();
+  const navigate = useNavigate();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
@@ -112,25 +114,36 @@ export default function Wallet() {
     fetchWalletData();
   }, []);
 
-  // Merge assets with price data
+  // Merge assets with price data and sort by total value
   const walletCoins = assets
     .map(asset => {
       const priceData = prices.get(asset.symbol.toLowerCase()) || 
                        Array.from(prices.values()).find(p => p.symbol === asset.symbol);
+      
+      const currentPrice = priceData?.currentPrice || 0;
+      const quantity = asset.quantity;
+      const totalValue = currentPrice * quantity;
       
       return {
         ...asset,
         coinId: priceData?.coinId || asset.symbol.toLowerCase(),
         name: asset.name || asset.symbol,
         symbol: asset.symbol,
-        quantity: asset.quantity,
-        currentPrice: priceData?.currentPrice || 0,
+        quantity: quantity,
+        currentPrice: currentPrice,
+        totalValue: totalValue, // Add totalValue for sorting
         priceChangePerc24h: priceData?.priceChangePerc24h || 0,
         marketCap: priceData?.marketCap || 0,
         image: priceData?.image || null,
       };
     })
-    .filter(coin => coin.quantity > 0); // Only show assets with balance
+    .filter(coin => coin.quantity > 0) // Only show assets with balance
+    .sort((a, b) => b.totalValue - a.totalValue); // Sort by total value (descending)
+
+  // Navigate to Trade page with pre-selected coin
+  const handleTradeClick = (coinId: string, symbol: string) => {
+    navigate(`/dashboard/trade?coin=${coinId}&symbol=${symbol}`);
+  };
 
   if (isLoading || loadingAssets) {
     return (
@@ -194,7 +207,6 @@ export default function Wallet() {
               </thead>
               <tbody>
                 {walletCoins.map((coin, index) => {
-                const totalValue = coin.currentPrice * coin.quantity;
                 return (
                   <motion.tr
                     key={coin.coinId}
@@ -225,7 +237,7 @@ export default function Wallet() {
                       {coin.quantity.toLocaleString()} {coin.symbol}
                     </td>
                     <td className="p-4 text-right font-bold text-gradient">
-                      ${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ${coin.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td className="p-4 text-right">
                       <div className={`inline-flex items-center gap-1 font-semibold ${(coin.priceChangePerc24h || 0) >= 0 ? 'text-success' : 'text-destructive'}`}>
@@ -239,11 +251,14 @@ export default function Wallet() {
                       </div>
                     </td>
                     <td className="p-4">
-                      <div className="flex items-center justify-center gap-1">
-                        <Button size="sm" variant="outline" className="text-xs">
-                          Buy
-                        </Button>
-                        <Button size="sm" variant="ghost" className="text-xs">
+                      <div className="flex items-center justify-center">
+                        <Button 
+                          size="sm" 
+                          variant="default" 
+                          className="text-xs gap-1"
+                          onClick={() => handleTradeClick(coin.coinId, coin.symbol)}
+                        >
+                          <Repeat className="h-3 w-3" />
                           Trade
                         </Button>
                       </div>
@@ -261,7 +276,6 @@ export default function Wallet() {
       {walletCoins.length > 0 && (
         <div className="md:hidden space-y-4">
           {walletCoins.map((coin, index) => {
-          const totalValue = coin.currentPrice * coin.quantity;
           return (
             <motion.div
               key={coin.coinId}
@@ -301,7 +315,7 @@ export default function Wallet() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-sm text-muted-foreground">Total Value</span>
-                    <span className="font-bold text-gradient">${totalValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                    <span className="font-bold text-gradient">${coin.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                   </div>
                 </div>
                 
@@ -310,8 +324,15 @@ export default function Wallet() {
                 </div>
                 
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="flex-1">Buy</Button>
-                  <Button size="sm" variant="ghost" className="flex-1">Trade</Button>
+                  <Button 
+                    size="sm" 
+                    variant="default" 
+                    className="flex-1 gap-2"
+                    onClick={() => handleTradeClick(coin.coinId, coin.symbol)}
+                  >
+                    <Repeat className="h-4 w-4" />
+                    Trade
+                  </Button>
                 </div>
               </Card>
             </motion.div>
